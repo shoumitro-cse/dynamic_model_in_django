@@ -8,6 +8,7 @@ from my_app.model_migration import get_info, get_create_sql_for_model
 
 class Restaurant(models.Model):
     name = models.CharField(max_length=32)
+    location = models.CharField(max_length=32, default="")
 
     class Meta:
         db_table = "restaurant"
@@ -58,7 +59,7 @@ def get_dynamic_model(restaurant_obj):
     # attrs['delete'] = delete
     attrs["id"] = models.IntegerField(primary_key=True, auto_created=True)
     attrs["name"] = models.CharField(max_length=30)
-    attrs["addr"] = models.TextField(default="Hello", null=True, blank=True)
+    attrs["address"] = models.TextField(default="Hello", null=True, blank=True)
     # attrs["location"] = models.CharField(max_length=30)
     # attrs["email"] = models.CharField(max_length=30)
     # attrs.update({field.name: field for field in restaurant_obj.__class__._meta.fields})
@@ -109,6 +110,8 @@ def add_necessary_db_columns(model_class):
 
                 print("alter_field start-----")
                 schema_editor.alter_field(model_class, field, field)
+                print(field)
+                print(field.__class__)
 
                 print("column sql start-----")
                 sql_for_column = schema_editor.column_sql(model_class, field)
