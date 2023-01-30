@@ -1,8 +1,5 @@
 from django.db import connection, connections
 from django.db import models
-
-
-# from south.db import db
 from my_app.model_migration import get_info, get_create_sql_for_model
 
 
@@ -29,72 +26,49 @@ def get_dynamic_model(restaurant_obj):
     _app_label = 'my_app'
     _db_table = f'restaurant_{restaurant_obj.pk}'
     _model_name = f"Restaurant_{restaurant_obj.pk}"
+    attrs = dict()
 
     def __str__(self):
         return str(self.name) + "-" + str(self.id)
 
-    def save(self, *args, **kwargs):
-        """Preventing data modification."""
-        return super().save(*args, **kwargs)
-
-    def delete(self, *args, **kwargs):
-        """Preventing data deletion."""
-        return super().delete(*args, **kwargs)
-
     class Meta:
         app_label = _app_label
-        # db_table = _db_table
-        # db_table = "restaurant_2"
-        db_table = "restaurant_3"
+        db_table = _db_table
         managed = False
         verbose_name = 'Restaurant %s' % restaurant_obj
         verbose_name_plural = 'Restaurant for %s' % restaurant_obj
         ordering = ('name',)
 
-    attrs = dict()
     attrs['__module__'] = 'my_app.models'
     attrs['Meta'] = Meta
     attrs['__str__'] = __str__
-    # attrs['save'] = save
-    # attrs['delete'] = delete
     attrs["id"] = models.IntegerField(primary_key=True, auto_created=True)
     attrs["name"] = models.CharField(max_length=30)
-    attrs["address"] = models.TextField(default="Hello", null=True, blank=True)
-    # attrs["location"] = models.CharField(max_length=30)
-    # attrs["email"] = models.CharField(max_length=30)
+    attrs["addr"] = models.TextField(default="Hello", null=True, blank=True)
+    attrs["location"] = models.CharField(max_length=30, default="")
+    attrs["email"] = models.CharField(max_length=30, default="")
     # attrs.update({field.name: field for field in restaurant_obj.__class__._meta.fields})
+
     model = type(_model_name, (models.Model,), attrs)
 
-    # table_name, sqls = get_create_sql_for_model(model)
-    # print(f"\n----------------{model}------------------")
-    # print(f"{table_name}: ", sqls)
-    # print("----------------------------------------------\n")
+    create_db_table(model)
+    add_necessary_db_columns(model)
 
+    # Restaurant.objects.using("default").filter(name="ddh").query
+    return model
+
+
+def create_db_table(model):
     if model._meta.db_table not in connection.introspection.table_names():
         with connections['default'].schema_editor() as schema_editor:
             schema_editor.create_model(model) # create new table
             # schema_editor.delete_model(model) # delete
-            # schema_editor.column_sql(table_name, column_name, field)
-
-    add_necessary_db_columns(model)
-
-    # Restaurant.objects.using("default").create(name="ddh")
-    return model
 
 
-def create_db_table(model_class):
-    table_name = model_class._meta.db_table
-    # if connection.introspection.identifier_converter(table_name) not in connection.introspection.table_names():
-    fields = [(f.name, f) for f in model_class._meta.fields]
-    # db.create_table(table_name, fields)
-    print("Creating table: '%s'\n" % table_name)
-    print("Table fields: '%s'\n" % fields)
-
-
-def add_necessary_db_columns(model_class):
-    create_db_table(model_class)
-    table_name = model_class._meta.db_table
-    fields = [(f.column, f) for f in model_class._meta.fields]
+def add_necessary_db_columns(model):
+    create_db_table(model)
+    table_name = model._meta.db_table
+    fields = [(f.column, f) for f in model._meta.fields]
 
     db_column_names = [row[0] for row in connection.introspection.get_table_description(connection.cursor(), table_name)]
     print("db_column_names: ", db_column_names)
@@ -103,38 +77,79 @@ def add_necessary_db_columns(model_class):
         for column_name, field in fields:
             if column_name == "addr":
 
-                print("alter_db_table start-----")
-                schema_editor.alter_db_table(model_class, table_name, table_name)
-                table_name = model_class._meta.db_table
+                print("\nalter_db_table start-----")
+                schema_editor.alter_db_table(model, table_name, table_name)
+                table_name = model._meta.db_table
                 print(table_name)
 
-                print("alter_field start-----")
-                schema_editor.alter_field(model_class, field, field)
+                print("\nalter_field start-----")
+                schema_editor.alter_field(model, field, field)
                 print(field)
                 print(field.__class__)
 
-                print("column sql start-----")
-                sql_for_column = schema_editor.column_sql(model_class, field)
-                print(sql_for_column)
+                print("\ncolumn sql start-----")
+                column_sql = schema_editor.column_sql(model, field)
+                print(column_sql)
+
+                print("\ntable_sql start-----")
+                table_sql = schema_editor.table_sql(model)
+                print(table_sql)
 
             if column_name not in db_column_names:
-                print("column creating-----")
-                schema_editor.add_field(model_class, field)
+                print("column adding-----")
+                schema_editor.add_field(model, field)
                 # schema_editor.alter_field(model_class, field)
                 # schema_editor.remove_field(model_class, field)
                 # sql_for_column = schema_editor.column_sql(model_class, field)
                 # schema_editor.create_model(model_class)
 
-            # print("Adding field '%s' to table '%s'" % (column_name, table_name))
-            # db.add_column(table_name, column_name, field)
-            # db.column_sql(table_name, column_name, field)
+
+# # for real connections example
+# class ConnectionHandler(object):
+#     def __getitem__(self, alias):
+#         print("alias db: ", alias)
+#
+#
+# connections = ConnectionHandler()
+# connections["default"]
+# connections["external_db"]
+#
+#
+# class point(object):
+#     def __init__(self,x=0,y=0):
+#         self.x=x
+#         self.y=y
+#
+#     def __str__(self):
+#         return "point(%s,%s)"%(self.x,self.y)
+#
+#     def __getitem__(self,item):
+#         print("__getitem__")
+#         return self.__dict__[item]
+#
+#     def __setitem__(self,item,value):
+#         print("__setitem__")
+#         self.__dict__[item] = value
+#
+# p = point()
+# print(p)
+# p["x"] # call __getitem__
+# p["x"] = 90 # call __setitem__
+# print(p)
 
 
+# table_name = model_class._meta.db_table
+# if connection.introspection.identifier_converter(table_name) not in connection.introspection.table_names():
+# fields = [(f.name, f) for f in model_class._meta.fields]
+# db.create_table(table_name, fields)
+# print("Creating table: '%s'\n" % table_name)
+# print("Table fields: '%s'\n" % fields)
 
 
-
-
-
+# table_name, sqls = get_create_sql_for_model(model)
+# print(f"\n----------------{model}------------------")
+# print(f"{table_name}: ", sqls)
+# print("----------------------------------------------\n")
 
 
 # # print(dir(restaurant_obj.__class__._meta))
